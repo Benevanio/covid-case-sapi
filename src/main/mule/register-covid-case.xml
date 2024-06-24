@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:db="http://www.mulesoft.org/schema/mule/db" 
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+      http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+      http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+      http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+  
+  <db:config name="Uhub_Database_Config" doc:name="Database Config" doc:id="7c424fbd-6f51-4ef4-8f68-e54dfe844f52">
+    <db:my-sql-connection host="localhost" port="3306" user="root" password="suaSenha" database="mulesoft_tutorial" >
+			<db:pooling-profile />
+		</db:my-sql-connection>
+  </db:config>
+  
+  <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="14c58dec-9ac4-4127-beb7-af5b073c3501" basePath="/learnmulesoft">
+    <http:listener-connection host="0.0.0.0" port="6061" />
+  </http:listener-config>
+  
+  <flow name="post:\cases:application\json:uhub-sapi-config">
+    <http:listener doc:name="Listener" doc:id="9c8f2367-a2a5-4bdc-8aab-a740b8e89dcc" config-ref="HTTP_Listener_config" path="v1/cases" allowedMethods="POST">
+      <http:response statusCode="#[vars.statusCode]" />
+    </http:listener>
+    
+    <ee:transform doc:name="Set correlationId And transactionId" doc:id="f4205589-67eb-4921-86b9-0674b10e592b">
+      <ee:message />
+      <ee:variables>
+        <ee:set-variable variableName="correlationId"><![CDATA[attributes.headers.'x-correlation-id' default ""]]></ee:set-variable>
+        <ee:set-variable variableName="transactionId"><![CDATA[attributes.headers.'x-transaction-id' default uuid()]]></ee:set-variable>
+      </ee:variables>
+    </ee:transform>
+    
+    <logger level="INFO" doc:name="Start Log" doc:id="10431700-9d4c-4c45-8d96-5bc4c3cfbf94" message='transactionID: #[vars.transactionId], correlationID: #[vars.correlationId], message: "Started update covid case flow", payload: #[payload]' />
+    
+    <ee:transform doc:name="Prepare Covid Case Payload" doc:id="51d00ce9-e50f-45af-9426-f2a52e3a8954">
+      <ee:message />
+      <ee:variables>
+        <ee:set-variable variableName="covidPayload"><![CDATA[%dw 2.0
+output application/json
+---
+{
+  source: payload.source,
+  case_type: payload.case_type,
+  first_name: payload.first_name,
+  last_name: payload.last_name,
+  phone: payload.phone,
+  email: payload.email,
+  date_of_birth: payload.date_of_birth,
+  national_id: payload.national_id,
+  national_id_type: payload.national_id_type,
+  street_address: payload.street_address,
+  city: payload.city,
+  state: payload.state,
+  postal: payload.postal,
+  country: payload.country,
+  create_date: payload.create_date,
+  update_date: payload.update_date,
+  create_by: payload.create_by,
+  update_by: payload.update_by
+}
+]]></ee:set-variable>
+      </ee:variables>
+    </ee:transform>
+    
+    <db:stored-procedure doc:name="Insert Covid Case Stored procedure" doc:id="553fb47a-3fbb-49cf-84d9-bfd8b83334d8" config-ref="Uhub_Database_Config">
+      <db:sql><![CDATA[{call insert_covid_master(:source, :case_type, :first_name, :last_name, :phone, :email, :date_of_birth, :national_id, :national_id_type, :street_address, :city, :state, :postal, :country, :create_date, :update_date, :create_by, :update_by, :case_id)}]]></db:sql>
+      <db:input-parameters><![CDATA[#[vars.covidPayload]]]></db:input-parameters>
+      <db:output-parameters>
+        <db:output-parameter key="case_id" type="INTEGER" />
+      </db:output-parameters>
+    </db:stored-procedure>
+    
+    <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd" doc:name="Prepare Response">
+      <ee:message>
+        <ee:set-payload><![CDATA[%dw 2.0
+          output application/json
+          ---
+          {
+            caseID: payload.case_id as String
+          }
+        ]]></ee:set-payload>
+      </ee:message>
+      <ee:variables>
+        <ee:set-variable variableName="statusCode"><![CDATA[201]]></ee:set-variable>
+      </ee:variables>
+    </ee:transform>
+    
+    <logger level="INFO" doc:name="End Log" doc:id="b33a9933-d6c8-406c-8732-eac40da7baaf" message='transactionID: #[vars.transactionId], correlationID: #[vars.correlationId], message: "Completed register covid case flow", payload: #[payload]' />
+  
+  </flow>
+</mule>
