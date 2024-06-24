@@ -1,4 +1,4 @@
-# Project Title: MuleSoft COVID Case Management API
+## MuleSoft COVID Case Management API
 
 ## Introduction
 This project is a MuleSoft application designed to manage COVID case data. It provides endpoints to create, update, and retrieve COVID case information. The project is built using MuleSoft, leveraging various connectors and modules such as HTTP, Database, and DataWeave.
